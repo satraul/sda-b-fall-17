@@ -394,8 +394,7 @@ class BSTree<E extends Comparable<? super E>>{
     public boolean contains(E elem){
 
         // TO DO : Lengkapi method ini
-        if(find(elem) == null) return false;
-        return true;
+        return find(elem) != null;
 
     }
 

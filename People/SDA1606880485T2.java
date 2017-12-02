@@ -53,8 +53,8 @@ public class SDA1606880485T2 {
 				
 				}
 			
-			Arrays.sort(hero);;
-			arrs.add(new Summon(Integer.parseInt(s[0]),Integer.parseInt(s[1]),hero));
+			Arrays.sort(hero);
+            arrs.add(new Summon(Integer.parseInt(s[0]),Integer.parseInt(s[1]),hero));
 			
 			
 			
