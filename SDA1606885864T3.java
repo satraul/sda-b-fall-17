@@ -16,6 +16,7 @@ public class SDA1606885864T3 {
 
         //Read until EOF
         while ((inp = br.readLine()) != null) {
+            if (inp.equals("")) break;
             inps = inp.split(" ");
             query = inps[0];
             A = inps[1];
@@ -96,7 +97,13 @@ public class SDA1606885864T3 {
 
             @Override
             public int compareTo(Node o) {
-                return this.name.compareTo(o.name);
+                if (!this.name.equals(o.name)) {
+                    return this.name.compareTo(o.name);
+                } else if (this.fileType != null && o.fileType != null && !this.fileType.equals(o.fileType)) {
+                    return this.fileType.compareTo(o.fileType);
+                } else {
+                    return o.getSize() - this.getSize();
+                }
             }
         }
 
@@ -112,6 +119,7 @@ public class SDA1606885864T3 {
             }
 
             void add(Node target){
+                target.parent = this;
                 Class newType = target.getClass();
                 if (newType == Folder.class){
                     Folder targetCasted = (Folder) target;
@@ -120,6 +128,10 @@ public class SDA1606885864T3 {
                             //Move all files to new folder
                             targetCasted.type = File.class;
                             targetCasted.files = files;
+                            targetCasted.fileType = fileType;
+                            for (File file: targetCasted.files) {
+                                file.parent = targetCasted;
+                            }
                             files = null;
                         }
                         type = Folder.class;
@@ -128,15 +140,7 @@ public class SDA1606885864T3 {
                     target.parent = this;
                     subFolders.add((Folder) target);
                 } else if (newType == File.class){
-                    if (type == null){
-                        type = File.class;
-                        files = new ArrayList<File>();
-                    }
-                    if (type == File.class){
-                        target.parent = this;
-                        files.add((File) target);
-                        if (fileType == null) fileType = target.fileType;
-                    }
+                    this.insert((File) target);
                 }
             }
 
@@ -158,6 +162,53 @@ public class SDA1606885864T3 {
                     type = null;
                     fileType = null;
                 }
+            }
+
+            Folder canTerimaFile(File target, boolean goUp) {
+                if (type == null){
+                    return this;
+                } else if (type == File.class){
+                    if (fileType.equals(target.fileType)) return this;
+                } else {
+                    Folder ret;
+                    for (Folder subFolder: subFolders) {
+                        ret = subFolder.canTerimaFile(target, false);
+                        if (ret != null) return ret;
+                    }
+                }
+                return goUp && parent != null ? parent.canTerimaFile(target, this) : null;
+            }
+
+            Folder canTerimaFile(File target, Folder mulaiDariSokap) {
+                Folder ret;
+                SortedSet<Folder> range1 = subFolders.tailSet(mulaiDariSokap), range2 = subFolders.headSet(mulaiDariSokap);
+                Iterator<Folder> iter1 = range1.iterator(), iter2 = range2.iterator();
+                iter1.next();
+                while (iter1.hasNext() || iter2.hasNext()) {
+                    Folder subFolder = iter1.hasNext() ? iter1.next() : iter2.next();
+                    ret = subFolder.canTerimaFile(target, false);
+                    if (ret != null) return ret;
+                }
+                return parent != null ? parent.canTerimaFile(target, this) : null;
+            }
+
+            String insert(File target) {
+                Folder folderYangAkhirnyaBisaNerimaFile = canTerimaFile(target, true);
+                if (folderYangAkhirnyaBisaNerimaFile != null){
+                    folderYangAkhirnyaBisaNerimaFile.insertFix(target);
+                    return String.format("%s.%s added to %s\n", target.name, target.fileType, target.parent.name);
+                }
+                return "";
+            }
+
+            void insertFix(File target){
+                type = File.class;
+                target.parent = this;
+                fileType = target.fileType;
+                if (files == null){
+                    files = new ArrayList<File>();
+                }
+                files.add(target);
             }
         }
 
@@ -183,42 +234,14 @@ public class SDA1606885864T3 {
             return add(newFolder, destination);
         }
 
-        String insert(File newFile, Folder destination, boolean insertUp, boolean insertDown) {
-            if (destination == null) return "";
-
-            // Only searches sideways, except when insertUp or insertDown is true
-            if (destination.parent == null){
-                if (destination.type == File.class && destination.fileType.equalsIgnoreCase(newFile.fileType)) {
-                    destination.add(newFile);
-                    return String.format("%s.%s added to %s\n", newFile.name, newFile.fileType, destination.name);
-                } else if (destination.type == Folder.class && insertDown) {
-                    String ret = insert(newFile, destination.subFolders.first(), false, true);
-                    if (!ret.equals("")) return ret;
-                } else {
-                    return "";
-                }
-            }
-
-            SortedSet<Folder> range1 = destination.parent.subFolders.tailSet(destination), range2 = destination.parent.subFolders.headSet(destination);
-            Iterator<Folder> iter1 = range1.iterator(), iter2 = range2.iterator();
-            Folder temp;
-            while (iter1.hasNext() || iter2.hasNext()){
-                temp = iter1.hasNext() ? iter1.next() : iter2.next();
-                if (temp.type == null || temp.type == File.class && temp.fileType.equalsIgnoreCase(newFile.fileType)) {
-                    temp.add(newFile);
-                    return String.format("%s.%s added to %s\n",newFile.name,newFile.fileType,temp.name);
-                } else if (temp.type == Folder.class) {
-                    String ret = insert(newFile, destination.subFolders.first(), false, true);
-                    if (!ret.equals("")) return ret;
-                }
-            }
-            return insertUp ? "" : insert(newFile, destination.parent, true, false);
+        String insert(File newFile, Folder destination) {
+            return destination.insert(newFile);
         }
 
         String insert(String A, String B, String C) {
             File newFile = new File(A,Integer.parseInt(B));
             Folder destination = index.getFolder(C);
-            return insert(newFile, destination, true, true);
+            return insert(newFile, destination);
         }
 
         String remove(Folder target){
@@ -227,9 +250,7 @@ public class SDA1606885864T3 {
                     remove(e);
                 }
             } else if (target.type == File.class){
-                for (File e: target.files){
-                    remove(e);
-                }
+                remove(target.files);
             }
             target.remove();
             index.remove(target);
@@ -239,8 +260,10 @@ public class SDA1606885864T3 {
         String remove(List<File> target) {
             String name = target.get(0).name;
             int counter = 0;
-            for (File subTarget:
-                 target) {
+            Iterator<File> iter = target.iterator();
+            while(iter.hasNext()) {
+                File subTarget = iter.next();
+                iter.remove();
                 remove(subTarget);
                 counter++;
             }
@@ -257,7 +280,7 @@ public class SDA1606885864T3 {
         }
 
         String printSearch(Folder target, int depth){
-            StringBuilder sb = new StringBuilder(prettyOutput(depth,target,true));
+            StringBuilder sb = new StringBuilder(prettyOutput(depth,target,false));
             if (target.type == Folder.class){
                 for (Folder e: target.subFolders) {
                     if (e.searchMark) sb.append(printSearch(e,depth+1));
@@ -266,7 +289,7 @@ public class SDA1606885864T3 {
                 Collections.sort(target.files);
                 for (File e: target.files) {
                     if (e.searchMark) {
-                        sb.append(prettyOutput(depth+1,e,true));
+                        sb.append(prettyOutput(depth+1,e,false));
                     }
                 }
             }
@@ -293,7 +316,9 @@ public class SDA1606885864T3 {
         }
 
         String search(String A) {
-            return index.getFolder(A) != null ? search(index.getFolder(A)) : search(index.getFiles(A));
+            if (index.getFolder(A) != null) return search(index.getFolder(A));
+            else if (index.getFiles(A) != null) return search(index.getFiles(A));
+            else return "";
         }
 
         public String print(Folder target, int depth) {
@@ -410,6 +435,7 @@ public class SDA1606885864T3 {
         String prettyOutput(int depth, Node target, boolean withSize){
             String spaces = new String(new char[depth]).replace("\0", "  ");
             String ret = spaces + "> " + target.name;
+            if (target instanceof File) ret += "." + target.fileType;
             return (withSize? ret + " " + target.getSize() + "\n" : ret + "\n");
         }
     }
