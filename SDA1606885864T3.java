@@ -38,22 +38,20 @@ public class SDA1606885864T3 {
                 case "print":
                     bw.write(FS.print(A));
                     break;
-                case "recommend":
-                    bw.write(FS.recommend(A,B));
-                    break;
-                case "move":
-                    bw.write(FS.move(A,B));
-                    break;
-                case "cut":
-                    bw.write(FS.cut(A,B,C));
-                    break;
+//                case "recommend":
+//                    bw.write(FS.recommend(A,B));
+//                    break;
+//                case "move":
+//                    bw.write(FS.move(A,B));
+//                    break;
+//                case "cut":
+//                    bw.write(FS.cut(A,B,C));
+//                    break;
                 default:
                     break;
             }
             bw.flush();
         }
-
-        bw.flush();
     }
 
     public static class FileSystem {
@@ -102,15 +100,15 @@ public class SDA1606885864T3 {
                 } else if (this.fileType != null && o.fileType != null && !this.fileType.equals(o.fileType)) {
                     return this.fileType.compareTo(o.fileType);
                 } else {
-                    return o.getSize() - this.getSize();
+                    return this.getSize() - o.getSize();
                 }
             }
         }
 
         class Folder extends Node {
             private Class type;
-            private TreeSet<Folder> subFolders;
-            private List<File> files;
+            private TreeSet<Folder> subFolders = new TreeSet<Folder>();
+            private List<File> files = new ArrayList<File>();
 
             Folder(String name) {
                 this.name = name;
@@ -118,47 +116,54 @@ public class SDA1606885864T3 {
                 index.add(this);
             }
 
-            void add(Node target){
+            void add(Folder target){
                 target.parent = this;
-                Class newType = target.getClass();
-                if (newType == Folder.class){
-                    Folder targetCasted = (Folder) target;
-                    if (type != Folder.class){
-                        if (type == File.class){
-                            //Move all files to new folder
-                            targetCasted.type = File.class;
-                            targetCasted.files = files;
-                            targetCasted.fileType = fileType;
-                            for (File file: targetCasted.files) {
-                                file.parent = targetCasted;
-                            }
-                            files = null;
-                        }
-                        type = Folder.class;
-                        subFolders = new TreeSet<Folder>();
-                    }
-                    target.parent = this;
-                    subFolders.add((Folder) target);
-                } else if (newType == File.class){
-                    this.insert((File) target);
+                if (type == File.class){
+                    target.insert(files);
+                    subFolders.clear();
                 }
-            }
-
-            void add(List<File> target){
-                for (File e: target) {
-                    add(e);
-                }
-            }
-
-            void remove(Node target){
-                if (target instanceof File) files.remove(target);
-                else if (target instanceof Folder) subFolders.remove(target);
+                files.clear();
+                subFolders.add(target);
                 update();
             }
 
-            void update(){
-                if (subFolders != null && subFolders.isEmpty()) type = null;
-                if (files != null && files.isEmpty()){
+            void remove(Node target){
+                if (target instanceof File){
+                    files.remove(target);
+                    index.remove((File) target);
+                }
+                else if (target instanceof Folder){
+                    Folder targetCasted = (Folder) target;
+                    if (targetCasted.type == Folder.class){
+                        for (Iterator<Folder> iterator = targetCasted.subFolders.iterator(); iterator.hasNext(); ) {
+                            Folder e = iterator.next();
+                            iterator.remove();
+                            targetCasted.remove(e);
+                        }
+                    } else if (targetCasted.type == File.class){
+                        for (Iterator<File> iterator = targetCasted.files.iterator(); iterator.hasNext(); ) {
+                            File e = iterator.next();
+                            iterator.remove();
+                            targetCasted.remove(e);
+                        }
+                    }
+                    subFolders.remove(target);
+                    index.remove((Folder) target);
+                }
+                update();
+            }
+
+            void update() {
+                if (!files.isEmpty()){
+                    type = File.class;
+                    fileType = files.get(0).fileType;
+                } else if (!subFolders.isEmpty()){
+                    type = Folder.class;
+                }
+
+                if (type == Folder.class && subFolders.isEmpty()){
+                    type = null;
+                } else if (type == File.class && files.isEmpty()){
                     type = null;
                     fileType = null;
                 }
@@ -183,32 +188,45 @@ public class SDA1606885864T3 {
                 Folder ret;
                 SortedSet<Folder> range1 = subFolders.tailSet(mulaiDariSokap), range2 = subFolders.headSet(mulaiDariSokap);
                 Iterator<Folder> iter1 = range1.iterator(), iter2 = range2.iterator();
-                iter1.next();
                 while (iter1.hasNext() || iter2.hasNext()) {
                     Folder subFolder = iter1.hasNext() ? iter1.next() : iter2.next();
+                    if (subFolder == mulaiDariSokap) continue;
                     ret = subFolder.canTerimaFile(target, false);
                     if (ret != null) return ret;
                 }
                 return parent != null ? parent.canTerimaFile(target, this) : null;
             }
 
+            void insert(List<File> target){
+                Folder folderYangAkhirnyaBisaNerimaFile = canTerimaFile(target.get(0), true);
+                if (folderYangAkhirnyaBisaNerimaFile != null){
+                    for (File e: target) {
+                        folderYangAkhirnyaBisaNerimaFile.insertFix(e);
+                    }
+                } else {
+                    for (File e: target) {
+                        index.remove(e);
+                    }
+                }
+            }
+
             String insert(File target) {
                 Folder folderYangAkhirnyaBisaNerimaFile = canTerimaFile(target, true);
                 if (folderYangAkhirnyaBisaNerimaFile != null){
                     folderYangAkhirnyaBisaNerimaFile.insertFix(target);
+                    update();
                     return String.format("%s.%s added to %s\n", target.name, target.fileType, target.parent.name);
                 }
+                update();
+                index.remove(target);
                 return "";
             }
 
             void insertFix(File target){
-                type = File.class;
+                subFolders.clear();
                 target.parent = this;
-                fileType = target.fileType;
-                if (files == null){
-                    files = new ArrayList<File>();
-                }
                 files.add(target);
+                update();
             }
         }
 
@@ -228,7 +246,7 @@ public class SDA1606885864T3 {
             return "";
         }
 
-        public String add(String A, String B) {
+        String add(String A, String B) {
             Folder newFolder = new Folder(A);
             Folder destination = index.getFolder(B);
             return add(newFolder, destination);
@@ -245,15 +263,7 @@ public class SDA1606885864T3 {
         }
 
         String remove(Folder target){
-            if (target.type == Folder.class){
-                for (Folder e: target.subFolders){
-                    remove(e);
-                }
-            } else if (target.type == File.class){
-                remove(target.files);
-            }
             target.remove();
-            index.remove(target);
             return String.format("Folder %s removed\n", target.name);
         }
 
@@ -264,19 +274,19 @@ public class SDA1606885864T3 {
             while(iter.hasNext()) {
                 File subTarget = iter.next();
                 iter.remove();
-                remove(subTarget);
+                subTarget.remove();
                 counter++;
             }
             index.remove(name);
             return String.format("%d File %s removed\n", counter, name);
         }
 
-        void remove(File target){
-            target.remove();
-        }
-
         String remove(String A) {
-            return index.getFolder(A) != null ? remove(index.getFolder(A)) : remove(index.getFiles(A));
+            if (A.equals("root")) return "";
+            String ret = "";
+            if (index.getFolder(A) != null) ret += remove(index.getFolder(A));
+            if (index.getFiles(A) != null) ret += remove(index.getFiles(A));
+            return ret;
         }
 
         String printSearch(Folder target, int depth){
@@ -341,65 +351,65 @@ public class SDA1606885864T3 {
             return print(target, 0);
         }
 
-        String recommend(String regex, Folder target) {
-            StringBuilder sb = new StringBuilder();
-            if (target.type == Folder.class){
-                for (Folder e: target.subFolders) {
-                    if (e.name.startsWith(regex)) sb.append(prettyOutput(0,e,false));
-                }
-            } else if (target.type == File.class) {
-                Collections.sort(target.files);
-                for (File e: target.files) {
-                    if (e.name.startsWith(regex)) sb.append(prettyOutput(0,e,false));
-                }
-            }
-            return sb.toString();
-        }
-
-        String recommend(String A, String B) {
-            Folder target = index.getFolder(B);
-            return recommend(A, target);
-        }
-
-        String move(Folder selected, Folder destination) {
-            //Check if destination is inside selected
-            Folder temp = destination;
-            while (temp.parent != null){
-                if (temp.parent == selected){
-                    return String.format("%s is inside %s\n",destination.name,selected.name);
-                } else {
-                    temp = temp.parent;
-                }
-            }
-            selected.parent.subFolders.remove(selected);
-            destination.add(selected);
-            return "";
-        }
-
-        String move(String A, String B) {
-            Folder selected = index.getFolder(A);
-            Folder destination = index.getFolder(B);
-            return move(selected, destination);
-        }
-
-        String cut(List<File> fileCandidates, Folder source, Folder destination) {
-            if (source.type == File.class) {
-                List<File> cutFiles = new ArrayList<File>(fileCandidates);
-                cutFiles.retainAll(source.files);
-                source.files.removeAll(fileCandidates);
-                destination.add(fileCandidates);
-                return String.format("%d File %s moved to %s\n",cutFiles.size(),cutFiles.get(0).name,destination.name);
-            }
-            //TODO: Cari benernya gimana
-            return "File not found\n";
-        }
-
-        String cut(String A, String B, String C) {
-            List<File> fileCandidates = index.getFiles(A);
-            Folder source = index.getFolder(B);
-            Folder destination = index.getFolder(C);
-            return cut(fileCandidates, source, destination);
-        }
+//        String recommend(String regex, Folder target) {
+//            StringBuilder sb = new StringBuilder();
+//            if (target.type == Folder.class){
+//                for (Folder e: target.subFolders) {
+//                    if (e.name.startsWith(regex)) sb.append(prettyOutput(0,e,false));
+//                }
+//            } else if (target.type == File.class) {
+//                Collections.sort(target.files);
+//                for (File e: target.files) {
+//                    if (e.name.startsWith(regex)) sb.append(prettyOutput(0,e,false));
+//                }
+//            }
+//            return sb.toString();
+//        }
+//
+//        String recommend(String A, String B) {
+//            Folder target = index.getFolder(B);
+//            return recommend(A, target);
+//        }
+//
+//        String move(Folder selected, Folder destination) {
+//            //Check if destination is inside selected
+//            Folder temp = destination;
+//            while (temp.parent != null){
+//                if (temp.parent == selected){
+//                    return String.format("%s is inside %s\n",destination.name,selected.name);
+//                } else {
+//                    temp = temp.parent;
+//                }
+//            }
+//            selected.parent.subFolders.remove(selected);
+//            destination.add(selected);
+//            return "";
+//        }
+//
+//        String move(String A, String B) {
+//            Folder selected = index.getFolder(A);
+//            Folder destination = index.getFolder(B);
+//            return move(selected, destination);
+//        }
+//
+//        String cut(List<File> fileCandidates, Folder source, Folder destination) {
+//            if (source.type == File.class) {
+//                List<File> cutFiles = new ArrayList<File>(fileCandidates);
+//                cutFiles.retainAll(source.files);
+//                source.files.removeAll(fileCandidates);
+//                destination.insert(fileCandidates);
+//                return String.format("%d File %s moved to %s\n",cutFiles.size(),cutFiles.get(0).name,destination.name);
+//            }
+//            //TODO: Cari benernya gimana
+//            return "File not found\n";
+//        }
+//
+//        String cut(String A, String B, String C) {
+//            List<File> fileCandidates = index.getFiles(A);
+//            Folder source = index.getFolder(B);
+//            Folder destination = index.getFolder(C);
+//            return cut(fileCandidates, source, destination);
+//        }
 
         // Helper classes/methods
         class Indexer {
@@ -425,6 +435,11 @@ public class SDA1606885864T3 {
 
             void remove(Folder target){
                 folderIndex.remove(target.name);
+            }
+
+            void remove(File target){
+                fileIndex.get(target.name).remove(target);
+                if (fileIndex.get(target.name).isEmpty()) fileIndex.remove(target.name);
             }
 
             void remove(String target){
